@@ -8,9 +8,9 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import androidx.annotation.NonNull;
-import com.lake.mybottomsheetdemo.bottom.BottomSheetDialog2;
+import com.lake.mybottomsheetdemo.bottom.HBottomSheetDialog;
 
-public abstract class BaseBottomSheetDialog extends BottomSheetDialog2 implements View.OnClickListener {
+public abstract class BaseBottomSheetDialog extends HBottomSheetDialog implements View.OnClickListener {
 
     private ImageView closeBtn;
 

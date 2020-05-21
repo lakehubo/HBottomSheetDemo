@@ -5,7 +5,6 @@ import android.content.res.TypedArray;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.TypedValue;
-import android.view.Display;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,11 +21,9 @@ import androidx.core.view.AccessibilityDelegateCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.lake.mybottomsheetdemo.R;
-import static com.lake.mybottomsheetdemo.bottom.BottomSheetBehavior2.STATE_EXPANDED;
-import static com.lake.mybottomsheetdemo.bottom.BottomSheetBehavior2.STATE_HALF_EXPANDED;
 
-public class BottomSheetDialog2 extends AppCompatDialog {
-    private BottomSheetBehavior2<FrameLayout> behavior;
+public class HBottomSheetDialog extends AppCompatDialog {
+    private HBottomSheetBehavior<FrameLayout> behavior;
 
     private FrameLayout container;
 
@@ -36,18 +33,18 @@ public class BottomSheetDialog2 extends AppCompatDialog {
     private boolean canceledOnTouchOutside = true;
     private boolean canceledOnTouchOutsideSet;
 
-    public BottomSheetDialog2(@NonNull Context context) {
+    public HBottomSheetDialog(@NonNull Context context) {
         this(context, 0);
     }
 
-    public BottomSheetDialog2(@NonNull Context context, @StyleRes int theme) {
+    public HBottomSheetDialog(@NonNull Context context, @StyleRes int theme) {
         super(context, getThemeResId(context, theme));
         // We hide the title bar for any style configuration. Otherwise, there will be a gap
         // above the bottom sheet when it is expanded.
         supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
     }
 
-    protected BottomSheetDialog2(
+    protected HBottomSheetDialog(
             @NonNull Context context, boolean cancelable, OnCancelListener cancelListener) {
         super(context, cancelable, cancelListener);
         supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -96,8 +93,8 @@ public class BottomSheetDialog2 extends AppCompatDialog {
     @Override
     protected void onStart() {
         super.onStart();
-        if (behavior != null && behavior.getState() == BottomSheetBehavior2.STATE_HIDDEN) {
-            behavior.setState(BottomSheetBehavior2.STATE_COLLAPSED);
+        if (behavior != null && behavior.getState() == HBottomSheetBehavior.STATE_HIDDEN) {
+            behavior.setState(HBottomSheetBehavior.STATE_COLLAPSED);
         }
     }
 
@@ -113,18 +110,18 @@ public class BottomSheetDialog2 extends AppCompatDialog {
      * then keep the default behavior.
      *
      * <p>Else, since this is a terminal event which will finish this dialog, we override the attached
-     * {@link BottomSheetBehavior2.BottomSheetCallback} to call this function, after {@link
-     * BottomSheetBehavior2#STATE_HIDDEN} is set. This will enforce the swipe down animation before
+     * {@link HBottomSheetBehavior.BottomSheetCallback} to call this function, after {@link
+     * HBottomSheetBehavior#STATE_HIDDEN} is set. This will enforce the swipe down animation before
      * canceling this dialog.
      */
     @Override
     public void cancel() {
-        BottomSheetBehavior2<FrameLayout> behavior = getBehavior();
+        HBottomSheetBehavior<FrameLayout> behavior = getBehavior();
 
-        if (!dismissWithAnimation || behavior.getState() == BottomSheetBehavior2.STATE_HIDDEN) {
+        if (!dismissWithAnimation || behavior.getState() == HBottomSheetBehavior.STATE_HIDDEN) {
             super.cancel();
         } else {
-            behavior.setState(BottomSheetBehavior2.STATE_HIDDEN);
+            behavior.setState(HBottomSheetBehavior.STATE_HIDDEN);
         }
     }
 
@@ -139,7 +136,7 @@ public class BottomSheetDialog2 extends AppCompatDialog {
     }
 
     @NonNull
-    public BottomSheetBehavior2<FrameLayout> getBehavior() {
+    public HBottomSheetBehavior<FrameLayout> getBehavior() {
         if (behavior == null) {
             // The content hasn't been set, so the behavior doesn't exist yet. Let's create it.
             ensureContainerAndBehavior();
@@ -170,7 +167,7 @@ public class BottomSheetDialog2 extends AppCompatDialog {
         if (container == null) {
             container = (FrameLayout) View.inflate(getContext(), R.layout.design_bottom_sheet_dialog2, null);
             FrameLayout bottomSheet = (FrameLayout) container.findViewById(R.id.design_bottom_sheet);
-            behavior = BottomSheetBehavior2.from(bottomSheet);
+            behavior = HBottomSheetBehavior.from(bottomSheet);
             behavior.addBottomSheetCallback(bottomSheetCallback);
             behavior.setHideable(cancelable);
         }
@@ -270,16 +267,13 @@ public class BottomSheetDialog2 extends AppCompatDialog {
     }
 
     @NonNull
-    private BottomSheetBehavior2.BottomSheetCallback bottomSheetCallback =
-            new BottomSheetBehavior2.BottomSheetCallback() {
+    private HBottomSheetBehavior.BottomSheetCallback bottomSheetCallback =
+            new HBottomSheetBehavior.BottomSheetCallback() {
                 @Override
                 public void onStateChanged(
-                        @NonNull View bottomSheet, @BottomSheetBehavior2.State int newState) {
-                    if (newState == BottomSheetBehavior2.STATE_HIDDEN) {
+                        @NonNull View bottomSheet, @HBottomSheetBehavior.State int newState) {
+                    if (newState == HBottomSheetBehavior.STATE_HIDDEN) {
                         cancel();
-                    }
-                    if (newState == STATE_HALF_EXPANDED) {
-                        behavior.setState(STATE_EXPANDED);
                     }
                 }
 

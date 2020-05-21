@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">MyBottomSheetDemo</string>
-    <string name="bottom_sheet_behavior2" translatable="false">com.lake.mybottomsheetdemo.bottom.BottomSheetBehavior2</string>
+    <string name="h_bottom_sheet_behavior" translatable="false">com.lake.mybottomsheetdemo.bottom.HBottomSheetBehavior</string>
 </resources>

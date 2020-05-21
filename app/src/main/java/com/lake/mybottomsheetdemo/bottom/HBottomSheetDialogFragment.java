@@ -8,7 +8,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatDialogFragment;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 
-public class BottomSheetDialogFragment2 extends AppCompatDialogFragment {
+public class HBottomSheetDialogFragment extends AppCompatDialogFragment {
     /**
      * Tracks if we are waiting for a dismissAllowingStateLoss or a regular dismiss once the
      * BottomSheet is hidden and onStateChanged() is called.
@@ -18,7 +18,7 @@ public class BottomSheetDialogFragment2 extends AppCompatDialogFragment {
     @NonNull
     @Override
     public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
-        return new BottomSheetDialog2(getContext(), getTheme());
+        return new HBottomSheetDialog(getContext(), getTheme());
     }
 
     @Override
@@ -41,9 +41,9 @@ public class BottomSheetDialogFragment2 extends AppCompatDialogFragment {
      */
     private boolean tryDismissWithAnimation(boolean allowingStateLoss) {
         Dialog baseDialog = getDialog();
-        if (baseDialog instanceof BottomSheetDialog2) {
-            BottomSheetDialog2 dialog = (BottomSheetDialog2) baseDialog;
-            BottomSheetBehavior2<?> behavior = dialog.getBehavior();
+        if (baseDialog instanceof HBottomSheetDialog) {
+            HBottomSheetDialog dialog = (HBottomSheetDialog) baseDialog;
+            HBottomSheetBehavior<?> behavior = dialog.getBehavior();
             if (behavior.isHideable() && dialog.getDismissWithAnimation()) {
                 dismissWithAnimation(behavior, allowingStateLoss);
                 return true;
@@ -54,17 +54,17 @@ public class BottomSheetDialogFragment2 extends AppCompatDialogFragment {
     }
 
     private void dismissWithAnimation(
-            @NonNull BottomSheetBehavior2<?> behavior, boolean allowingStateLoss) {
+            @NonNull HBottomSheetBehavior<?> behavior, boolean allowingStateLoss) {
         waitingForDismissAllowingStateLoss = allowingStateLoss;
 
-        if (behavior.getState() == BottomSheetBehavior2.STATE_HIDDEN) {
+        if (behavior.getState() == HBottomSheetBehavior.STATE_HIDDEN) {
             dismissAfterAnimation();
         } else {
-            if (getDialog() instanceof BottomSheetDialog2) {
-                ((BottomSheetDialog2) getDialog()).removeDefaultCallback();
+            if (getDialog() instanceof HBottomSheetDialog) {
+                ((HBottomSheetDialog) getDialog()).removeDefaultCallback();
             }
-            behavior.addBottomSheetCallback(new BottomSheetDialogFragment2.BottomSheetDismissCallback());
-            behavior.setState(BottomSheetBehavior2.STATE_HIDDEN);
+            behavior.addBottomSheetCallback(new HBottomSheetDialogFragment.BottomSheetDismissCallback());
+            behavior.setState(HBottomSheetBehavior.STATE_HIDDEN);
         }
     }
 
@@ -76,7 +76,7 @@ public class BottomSheetDialogFragment2 extends AppCompatDialogFragment {
         }
     }
 
-    private class BottomSheetDismissCallback extends BottomSheetBehavior2.BottomSheetCallback {
+    private class BottomSheetDismissCallback extends HBottomSheetBehavior.BottomSheetCallback {
 
         @Override
         public void onStateChanged(@NonNull View bottomSheet, int newState) {

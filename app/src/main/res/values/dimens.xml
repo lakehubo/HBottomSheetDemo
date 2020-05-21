@@ -2,4 +2,5 @@
 <resources>
     <item type="dimen" name="dialog_fixed_width_major">100%</item>
     <item type="dimen" name="dialog_fixed_width_minor">100%</item>
+    <dimen name="h_design_bottom_sheet_peek_height_min">64dp</dimen>
 </resources>
