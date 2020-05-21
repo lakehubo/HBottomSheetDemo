@@ -16,8 +16,6 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
-
-import androidx.annotation.FloatRange;
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -26,22 +24,15 @@ import androidx.annotation.VisibleForTesting;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.core.math.MathUtils;
 import androidx.core.view.ViewCompat;
-import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
-import androidx.core.view.accessibility.AccessibilityViewCommand;
 import androidx.customview.view.AbsSavedState;
 import androidx.customview.widget.ViewDragHelper;
-
 import com.google.android.material.shape.MaterialShapeDrawable;
 import com.google.android.material.shape.ShapeAppearanceModel;
 import com.lake.mybottomsheetdemo.R;
-
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-
 import static androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP;
 
 public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Behavior<V> {
@@ -55,8 +46,8 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
          *
          * @param bottomSheet The bottom sheet view.
          * @param newState    The new state. This will be one of {@link #STATE_DRAGGING}, {@link
-         *                    #STATE_SETTLING}, {@link #STATE_EXPANDED}, {@link #STATE_COLLAPSED}, {@link
-         *                    #STATE_HIDDEN}, or {@link #STATE_HALF_EXPANDED}.
+         *                    #STATE_SETTLING}, {@link #STATE_EXPANDED},  or {@link
+         *                    #STATE_HIDDEN}.
          */
         public abstract void onStateChanged(@NonNull View bottomSheet, @HBottomSheetBehavior.State int newState);
 
@@ -87,19 +78,10 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
     public static final int STATE_EXPANDED = 3;
 
     /**
-     * The bottom sheet is collapsed.
-     */
-    public static final int STATE_COLLAPSED = 4;
-
-    /**
      * The bottom sheet is hidden.
      */
-    public static final int STATE_HIDDEN = 5;
+    public static final int STATE_HIDDEN = 4;
 
-    /**
-     * The bottom sheet is half-expanded (used when mFitToContents is false).
-     */
-    public static final int STATE_HALF_EXPANDED = 6;
 
     /**
      * @hide
@@ -107,11 +89,9 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
     @RestrictTo(LIBRARY_GROUP)
     @IntDef({
             STATE_EXPANDED,
-            STATE_COLLAPSED,
             STATE_DRAGGING,
             STATE_SETTLING,
             STATE_HIDDEN,
-            STATE_HALF_EXPANDED
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface State {
@@ -141,11 +121,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
     public static final int SAVE_HIDEABLE = 1 << 2;
 
     /**
-     * This flag will preserve the skipCollapsed boolean value on configuration change.
-     */
-    public static final int SAVE_SKIP_COLLAPSED = 1 << 3;
-
-    /**
      * This flag will preserve all aforementioned values on configuration change.
      */
     public static final int SAVE_ALL = -1;
@@ -167,7 +142,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
                     SAVE_PEEK_HEIGHT,
                     SAVE_FIT_TO_CONTENTS,
                     SAVE_HIDEABLE,
-                    SAVE_SKIP_COLLAPSED,
                     SAVE_ALL,
                     SAVE_NONE,
             })
@@ -189,8 +163,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
     private static final int CORNER_ANIMATION_DURATION = 500;//动画时长
 
     private boolean fitToContents = false;//适配容器
-
-    private boolean updateImportantForAccessibilityOnSiblings = false;
 
     private float maximumVelocity;//最大速度
 
@@ -234,22 +206,21 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
 
     int fitToContentsOffset;//适配容器偏移
 
-    int halfExpandedOffset;//半展偏移
+    int hideLineOffset;//隐藏标准偏移
 
-    float halfExpandedRatio = 0.5f;//半展比例
-
-    int collapsedOffset;//折叠偏移
+    /**
+     * 隐藏线的百分比
+     */
+    float hideLineOffsetRatio = 0.5f;
 
     float elevation = -1;//图层级别
 
     boolean hideable;//是否可折叠
 
-    private boolean skipCollapsed;//跳过折叠
-
     private boolean draggable = true;//是否可拖拽
 
     @HBottomSheetBehavior.State
-    int state = STATE_COLLAPSED;//当前状态-折叠
+    int state = STATE_EXPANDED;//当前状态-展开
 
     @Nullable
     ViewDragHelper viewDragHelper;//拖拽帮助类
@@ -258,7 +229,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
 
     private int lastNestedScrollDy;//最后嵌套滑动的y值
 
-    private boolean nestedScrolled;//是否嵌套滑动
+    private boolean nestedScrolled;//是否是嵌套滑动
 
     int parentWidth;//父容器宽度
     int parentHeight;//父容器高度
@@ -281,45 +252,37 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
 
     boolean touchingScrollingChild;//是否触摸滑动子view
 
-    @Nullable
-    private Map<View, Integer> importantForAccessibilityMap;//无障碍功能
-
     public HBottomSheetBehavior() {
     }
 
     public HBottomSheetBehavior(@NonNull Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
-        TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.BottomSheetBehavior_Layout);
-        this.shapeThemingEnabled = a.hasValue(R.styleable.BottomSheetBehavior_Layout_shapeAppearance);
-        boolean hasBackgroundTint = false;
-        createMaterialShapeDrawable(context, attrs, hasBackgroundTint);
+        TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.HBottomSheetBehavior_Layout);
+        this.shapeThemingEnabled = a.hasValue(R.styleable.HBottomSheetBehavior_Layout_shapeAppearance);
+        createMaterialShapeDrawable(context, attrs, false);
         createShapeValueAnimator();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            this.elevation = a.getDimension(R.styleable.BottomSheetBehavior_Layout_android_elevation, -1);
+            this.elevation = a.getDimension(R.styleable.HBottomSheetBehavior_Layout_android_elevation, -1);
         }
 
-        TypedValue value = a.peekValue(R.styleable.BottomSheetBehavior_Layout_behavior_peekHeight);
+        TypedValue value = a.peekValue(R.styleable.HBottomSheetBehavior_Layout_h_behavior_peekHeight);
         if (value != null && value.data == PEEK_HEIGHT_AUTO) {
             setPeekHeight(value.data);
         } else {
             setPeekHeight(
                     a.getDimensionPixelSize(
-                            R.styleable.BottomSheetBehavior_Layout_behavior_peekHeight, PEEK_HEIGHT_AUTO));
+                            R.styleable.HBottomSheetBehavior_Layout_h_behavior_peekHeight, PEEK_HEIGHT_AUTO));
         }
-        setHideable(a.getBoolean(R.styleable.BottomSheetBehavior_Layout_behavior_hideable, false));
+        setHideable(a.getBoolean(R.styleable.HBottomSheetBehavior_Layout_h_behavior_hideable, false));
         setFitToContents(
-                a.getBoolean(R.styleable.BottomSheetBehavior_Layout_behavior_fitToContents, true));
-        setSkipCollapsed(
-                a.getBoolean(R.styleable.BottomSheetBehavior_Layout_behavior_skipCollapsed, false));
-        setDraggable(a.getBoolean(R.styleable.BottomSheetBehavior_Layout_behavior_draggable, true));
-        setSaveFlags(a.getInt(R.styleable.BottomSheetBehavior_Layout_behavior_saveFlags, SAVE_NONE));
-        setHalfExpandedRatio(
-                a.getFloat(R.styleable.BottomSheetBehavior_Layout_behavior_halfExpandedRatio, 0.5f));
-        setExpandedOffset(a.getInt(R.styleable.BottomSheetBehavior_Layout_behavior_expandedOffset, 0));
+                a.getBoolean(R.styleable.HBottomSheetBehavior_Layout_h_behavior_fitToContents, true));
+        setDraggable(a.getBoolean(R.styleable.HBottomSheetBehavior_Layout_h_behavior_draggable, true));
+        setSaveFlags(a.getInt(R.styleable.HBottomSheetBehavior_Layout_h_behavior_saveFlags, SAVE_NONE));
+        setExpandedOffset(a.getInt(R.styleable.HBottomSheetBehavior_Layout_h_behavior_expandedOffset, 0));
         a.recycle();
         ViewConfiguration configuration = ViewConfiguration.get(context);
-        maximumVelocity = configuration.getScaledMaximumFlingVelocity();
+        maximumVelocity = configuration.getScaledMaximumFlingVelocity();//最大速度
     }
 
     @NonNull
@@ -335,9 +298,9 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         super.onRestoreInstanceState(parent, child, ss.getSuperState());
         // Restore Optional State values designated by saveFlags
         restoreOptionalState(ss);
-        // Intermediate states are restored as collapsed state
+        // Intermediate states are restored as expand state
         if (ss.state == STATE_DRAGGING || ss.state == STATE_SETTLING) {
-            this.state = STATE_COLLAPSED;
+            this.state = STATE_EXPANDED;
         } else {
             this.state = ss.state;
         }
@@ -385,11 +348,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
                 isShapeExpanded = state == STATE_EXPANDED;//初始状态是否为全展开
                 materialShapeDrawable.setInterpolation(isShapeExpanded ? 0f : 1f);//设置缩放，全展开时缩放0，否则缩放1
             }
-            updateAccessibilityActions();//更新当前可执行状态
-            if (ViewCompat.getImportantForAccessibility(child)
-                    == ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_AUTO) {//是否开启无障碍功能
-                ViewCompat.setImportantForAccessibility(child, ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_YES);
-            }
         }
         if (viewDragHelper == null) {//初始化拖拽工具
             viewDragHelper = ViewDragHelper.create(parent, dragCallback);
@@ -402,18 +360,13 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         parentWidth = parent.getWidth();//保存当前容器宽度
         parentHeight = parent.getHeight();//保存当前容器高度
         fitToContentsOffset = Math.max(0, parentHeight - child.getHeight());//留白偏移
-        calculateHalfExpandedOffset();//计算半展偏移
-        calculateCollapsedOffset();//计算折叠偏移
+        calculateHideOffset();//计算隐藏偏移
 
         //设置当前状态
         if (state == STATE_EXPANDED) {//展开
             ViewCompat.offsetTopAndBottom(child, getExpandedOffset());
-        } else if (state == STATE_HALF_EXPANDED) {//半展
-            ViewCompat.offsetTopAndBottom(child, halfExpandedOffset);
         } else if (hideable && state == STATE_HIDDEN) {//隐藏
             ViewCompat.offsetTopAndBottom(child, parentHeight);
-        } else if (state == STATE_COLLAPSED) {//折叠
-            ViewCompat.offsetTopAndBottom(child, collapsedOffset);
         } else if (state == STATE_DRAGGING || state == STATE_SETTLING) {//拖拽
             ViewCompat.offsetTopAndBottom(child, savedTop - child.getTop());
         }
@@ -485,6 +438,14 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
                 && Math.abs(initialY - event.getY()) > viewDragHelper.getTouchSlop();//最小拖拽位移
     }
 
+    /**
+     * 触摸事件回调
+     *
+     * @param parent
+     * @param child
+     * @param event
+     * @return
+     */
     @Override
     public boolean onTouchEvent(@NonNull CoordinatorLayout parent, @NonNull V child, @NonNull MotionEvent event) {
         if (!child.isShown()) {
@@ -515,7 +476,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         return !ignoreEvents;
     }
 
-    @Override
+    @Override//开始嵌套滑动
     public boolean onStartNestedScroll(
             @NonNull CoordinatorLayout coordinatorLayout,
             @NonNull V child,
@@ -528,7 +489,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         return (axes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0;
     }
 
-    @Override//开始滑动
+    @Override//准备嵌套滑动
     public void onNestedPreScroll(
             @NonNull CoordinatorLayout coordinatorLayout,
             @NonNull V child,
@@ -547,7 +508,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         }
         int currentTop = child.getTop();
         int newTop = currentTop - dy;
-        if (dy > 0) { // Upward
+        if (dy > 0) { // Upward 向上
             if (newTop < getExpandedOffset()) {
                 consumed[1] = currentTop - getExpandedOffset();
                 ViewCompat.offsetTopAndBottom(child, -consumed[1]);
@@ -562,9 +523,9 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
                 ViewCompat.offsetTopAndBottom(child, -dy);
                 setStateInternal(STATE_DRAGGING);
             }
-        } else if (dy < 0) { // Downward
+        } else if (dy < 0) { // Downward 向下
             if (!target.canScrollVertically(-1)) {
-                if (newTop <= collapsedOffset || hideable) {
+                if (newTop <= hideLineOffset || hideable) {
                     if (!draggable) {
                         // Prevent dragging
                         return;
@@ -573,10 +534,10 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
                     consumed[1] = dy;
                     ViewCompat.offsetTopAndBottom(child, -dy);
                     setStateInternal(STATE_DRAGGING);
-                } else {
-                    consumed[1] = currentTop - collapsedOffset;
+                } else {//返回展开状态
+                    consumed[1] = currentTop - expandedOffset;
                     ViewCompat.offsetTopAndBottom(child, -consumed[1]);
-                    setStateInternal(STATE_COLLAPSED);
+                    setStateInternal(STATE_EXPANDED);
                 }
             }
         }
@@ -585,7 +546,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         nestedScrolled = true;
     }
 
-    @Override//停止滑动
+    @Override//停止嵌套滑动
     public void onStopNestedScroll(
             @NonNull CoordinatorLayout coordinatorLayout,
             @NonNull V child,
@@ -603,64 +564,28 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         int top;
         int targetState;
         if (lastNestedScrollDy > 0) {
-            if (fitToContents) {
-                top = fitToContentsOffset;
-                targetState = STATE_EXPANDED;
-            } else {
-                int currentTop = child.getTop();
-                if (currentTop > halfExpandedOffset) {
-                    top = halfExpandedOffset;
-                    targetState = STATE_HALF_EXPANDED;
-                } else {
-                    top = expandedOffset;
-                    targetState = STATE_EXPANDED;
-                }
-            }
+            top = fitToContentsOffset;
+            targetState = STATE_EXPANDED;
         } else if (hideable && shouldHide(child, getYVelocity())) {
             top = parentHeight;
             targetState = STATE_HIDDEN;
-        } else if (lastNestedScrollDy == 0) {
+        } else {
             int currentTop = child.getTop();
             if (fitToContents) {
-                if (Math.abs(currentTop - fitToContentsOffset) < Math.abs(currentTop - collapsedOffset)) {
+                if (currentTop < hideLineOffset) {
                     top = fitToContentsOffset;
                     targetState = STATE_EXPANDED;
                 } else {
-                    top = collapsedOffset;
-                    targetState = STATE_COLLAPSED;
+                    top = parentHeight;
+                    targetState = STATE_HIDDEN;
                 }
             } else {
-                if (currentTop < halfExpandedOffset) {
-                    if (currentTop < Math.abs(currentTop - collapsedOffset)) {
-                        top = expandedOffset;
-                        targetState = STATE_EXPANDED;
-                    } else {
-                        top = halfExpandedOffset;
-                        targetState = STATE_HALF_EXPANDED;
-                    }
+                if (currentTop < hideLineOffset) {
+                    top = expandedOffset;
+                    targetState = STATE_EXPANDED;
                 } else {
-                    if (Math.abs(currentTop - halfExpandedOffset) < Math.abs(currentTop - collapsedOffset)) {
-                        top = halfExpandedOffset;
-                        targetState = STATE_HALF_EXPANDED;
-                    } else {
-                        top = collapsedOffset;
-                        targetState = STATE_COLLAPSED;
-                    }
-                }
-            }
-        } else {
-            if (fitToContents) {
-                top = collapsedOffset;
-                targetState = STATE_COLLAPSED;
-            } else {
-                // Settle to nearest height.
-                int currentTop = child.getTop();
-                if (Math.abs(currentTop - halfExpandedOffset) < Math.abs(currentTop - collapsedOffset)) {
-                    top = halfExpandedOffset;
-                    targetState = STATE_HALF_EXPANDED;
-                } else {
-                    top = collapsedOffset;
-                    targetState = STATE_COLLAPSED;
+                    top = parentHeight;
+                    targetState = STATE_HIDDEN;
                 }
             }
         }
@@ -720,15 +645,8 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         }
         this.fitToContents = fitToContents;
 
-        // If sheet is already laid out, recalculate the collapsed offset based on new setting.
-        // Otherwise, let onLayoutChild handle this later.
-        if (viewRef != null) {
-            calculateCollapsedOffset();
-        }
         // Fix incorrect expanded settings depending on whether or not we are fitting sheet to contents.
-        setStateInternal((this.fitToContents && state == STATE_HALF_EXPANDED) ? STATE_EXPANDED : state);
-
-        updateAccessibilityActions();
+        setStateInternal(this.fitToContents ? STATE_EXPANDED : state);
     }
 
     /**
@@ -768,8 +686,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         // If sheet is already laid out, recalculate the collapsed offset based on new setting.
         // Otherwise, let onLayoutChild handle this later.
         if (layout && viewRef != null) {
-            calculateCollapsedOffset();
-            if (state == STATE_COLLAPSED) {
+            if (state == STATE_EXPANDED) {
                 V view = viewRef.get();
                 if (view != null) {
                     if (animate) {
@@ -795,28 +712,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
     }
 
     /**
-     * Determines the height of the BottomSheet in the {@link #STATE_HALF_EXPANDED} state. The
-     * material guidelines recommended a value of 0.5, which results in the sheet filling half of the
-     * parent. The height of the BottomSheet will be smaller as this ratio is decreased and taller as
-     * it is increased. The default value is 0.5.
-     *
-     * @param ratio a float between 0 and 1, representing the {@link #STATE_HALF_EXPANDED} ratio.
-     * @attr com.google.android.material.R.styleable#BottomSheetBehavior_Layout_behavior_halfExpandedRatio
-     */
-    public void setHalfExpandedRatio(@FloatRange(from = 0.0f, to = 1.0f) float ratio) {
-
-        if ((ratio <= 0) || (ratio >= 1)) {
-            throw new IllegalArgumentException("ratio must be a float value between 0 and 1");
-        }
-        this.halfExpandedRatio = ratio;
-        // If sheet is already laid out, recalculate the half expanded offset based on new setting.
-        // Otherwise, let onLayoutChild handle this later.
-        if (viewRef != null) {
-            calculateHalfExpandedOffset();
-        }
-    }
-
-    /**
      * Determines the top offset of the BottomSheet in the {@link #STATE_EXPANDED} state when
      * fitsToContent is false. The default value is 0, which results in the sheet matching the
      * parent's top.
@@ -833,16 +728,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
     }
 
     /**
-     * Gets the ratio for the height of the BottomSheet in the {@link #STATE_HALF_EXPANDED} state.
-     *
-     * @attr com.google.android.material.R.styleable#BottomSheetBehavior_Layout_behavior_halfExpandedRatio
-     */
-    @FloatRange(from = 0.0f, to = 1.0f)
-    public float getHalfExpandedRatio() {
-        return halfExpandedRatio;
-    }
-
-    /**
      * Sets whether this bottom sheet can hide when it is swiped down.
      *
      * @param hideable {@code true} to make this bottom sheet hideable.
@@ -853,9 +738,8 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
             this.hideable = hideable;
             if (!hideable && state == STATE_HIDDEN) {
                 // Lift up to collapsed state
-                setState(STATE_COLLAPSED);
+                setState(STATE_EXPANDED);
             }
-            updateAccessibilityActions();
         }
     }
 
@@ -867,30 +751,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
      */
     public boolean isHideable() {
         return hideable;
-    }
-
-    /**
-     * Sets whether this bottom sheet should skip the collapsed state when it is being hidden after it
-     * is expanded once. Setting this to true has no effect unless the sheet is hideable.
-     *
-     * @param skipCollapsed True if the bottom sheet should skip the collapsed state.
-     * @attr ref
-     * com.google.android.material.R.styleable#BottomSheetBehavior_Layout_behavior_skipCollapsed
-     */
-    public void setSkipCollapsed(boolean skipCollapsed) {
-        this.skipCollapsed = skipCollapsed;
-    }
-
-    /**
-     * Sets whether this bottom sheet should skip the collapsed state when it is being hidden after it
-     * is expanded once.
-     *
-     * @return Whether the bottom sheet should skip the collapsed state.
-     * @attr ref
-     * com.google.android.material.R.styleable#BottomSheetBehavior_Layout_behavior_skipCollapsed
-     */
-    public boolean getSkipCollapsed() {
-        return skipCollapsed;
     }
 
     /**
@@ -912,7 +772,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
      * Sets save flags to be preserved in bottomsheet on configuration change.
      *
      * @param flags bitwise int of {@link #SAVE_PEEK_HEIGHT}, {@link #SAVE_FIT_TO_CONTENTS}, {@link
-     *              #SAVE_HIDEABLE}, {@link #SAVE_SKIP_COLLAPSED}, {@link #SAVE_ALL} and {@link #SAVE_NONE}.
+     *              #SAVE_HIDEABLE}, {@link #SAVE_ALL} and {@link #SAVE_NONE}.
      * @attr ref com.google.android.material.R.styleable#BottomSheetBehavior_Layout_behavior_saveFlags
      * @see #getSaveFlags()
      */
@@ -977,8 +837,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
      * Sets the state of the bottom sheet. The bottom sheet will transition to that state with
      * animation.
      *
-     * @param state One of {@link #STATE_COLLAPSED}, {@link #STATE_EXPANDED}, {@link #STATE_HIDDEN},
-     *              or {@link #STATE_HALF_EXPANDED}.
+     * @param state One of {@link #STATE_EXPANDED},or  {@link #STATE_HIDDEN}.
      */
     public void setState(@HBottomSheetBehavior.State int state) {
         if (state == this.state) {
@@ -986,10 +845,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         }
         if (viewRef == null) {
             // The view is not laid out yet; modify mState and let onLayoutChild handle it later
-            if (state == STATE_COLLAPSED
-                    || state == STATE_EXPANDED
-                    || state == STATE_HALF_EXPANDED
-                    || (hideable && state == STATE_HIDDEN)) {
+            if (state == STATE_EXPANDED || (hideable && state == STATE_HIDDEN)) {
                 this.state = state;
             }
             return;
@@ -1021,8 +877,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
     /**
      * Gets the current state of the bottom sheet.
      *
-     * @return One of {@link #STATE_EXPANDED}, {@link #STATE_HALF_EXPANDED}, {@link #STATE_COLLAPSED},
-     * {@link #STATE_DRAGGING}, {@link #STATE_SETTLING}, or {@link #STATE_HALF_EXPANDED}.
+     * @return One of {@link #STATE_EXPANDED}, {@link #STATE_DRAGGING}, or {@link #STATE_SETTLING}.
      */
     @HBottomSheetBehavior.State
     public int getState() {
@@ -1049,17 +904,10 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
             return;
         }
 
-        if (state == STATE_EXPANDED) {
-            updateImportantForAccessibility(true);
-        } else if (state == STATE_HALF_EXPANDED || state == STATE_HIDDEN || state == STATE_COLLAPSED) {
-            updateImportantForAccessibility(false);
-        }
-
         updateDrawableForTargetState(state);
         for (int i = 0; i < callbacks.size(); i++) {
             callbacks.get(i).onStateChanged(bottomSheet, state);
         }
-        updateAccessibilityActions();
     }
 
     private void updateDrawableForTargetState(@HBottomSheetBehavior.State int state) {
@@ -1097,23 +945,10 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
     }
 
     /**
-     * 计算折叠偏移（折叠的距离）
+     * 计算隐藏偏移（低于该值则隐藏view）
      */
-    private void calculateCollapsedOffset() {
-        int peek = calculatePeekHeight();
-
-        if (fitToContents) {//是否适配内容
-            collapsedOffset = Math.max(parentHeight - peek, fitToContentsOffset);
-        } else {
-            collapsedOffset = parentHeight - peek;
-        }
-    }
-
-    /**
-     * 计算半展偏移（半展的距离）
-     */
-    private void calculateHalfExpandedOffset() {
-        this.halfExpandedOffset = (int) (parentHeight * (1 - halfExpandedRatio));
+    private void calculateHideOffset() {
+        this.hideLineOffset = (int) (parentHeight * (1 - hideLineOffsetRatio));
     }
 
     /**
@@ -1141,10 +976,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         if (this.saveFlags == SAVE_ALL || (this.saveFlags & SAVE_HIDEABLE) == SAVE_HIDEABLE) {
             this.hideable = ss.hideable;
         }
-        if (this.saveFlags == SAVE_ALL
-                || (this.saveFlags & SAVE_SKIP_COLLAPSED) == SAVE_SKIP_COLLAPSED) {
-            this.skipCollapsed = ss.skipCollapsed;
-        }
     }
 
     /**
@@ -1155,16 +986,13 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
      * @return
      */
     boolean shouldHide(@NonNull View child, float yvel) {
-        if (skipCollapsed) {//跳过折叠判断，则直接折叠
-            return true;
-        }
-        if (child.getTop() < collapsedOffset) {//高于折叠线不折叠
+        if (child.getTop() < hideLineOffset) {//高于隐藏线不隐藏
             // It should not hide, but collapse.
             return false;
         }
         int peek = calculatePeekHeight();//可视高度
         final float newTop = child.getTop() + yvel * HIDE_FRICTION;//目标新高度
-        return Math.abs(newTop - collapsedOffset) / (float) peek > HIDE_THRESHOLD;//新高度距离折叠线大于半个可视高度则隐藏
+        return Math.abs(newTop - expandedOffset) / (float) peek > HIDE_THRESHOLD;//新高度距离折叠线大于半个可视高度则隐藏
     }
 
     @Nullable
@@ -1229,6 +1057,11 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
                 });
     }
 
+    /**
+     * 获取y轴速度
+     *
+     * @return
+     */
     private float getYVelocity() {
         if (velocityTracker == null) {
             return 0;
@@ -1243,16 +1076,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
 
     void settleToState(@NonNull View child, int state) {
         int top;
-        if (state == STATE_COLLAPSED) {
-            top = collapsedOffset;
-        } else if (state == STATE_HALF_EXPANDED) {
-            top = halfExpandedOffset;
-            if (fitToContents && top <= fitToContentsOffset) {
-                // Skip to the expanded state if we would scroll past the height of the contents.
-                state = STATE_EXPANDED;
-                top = fitToContentsOffset;
-            }
-        } else if (state == STATE_EXPANDED) {
+        if (state == STATE_EXPANDED) {
             top = getExpandedOffset();
         } else if (hideable && state == STATE_HIDDEN) {
             top = parentHeight;
@@ -1368,14 +1192,8 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
                             top = fitToContentsOffset;
                             targetState = STATE_EXPANDED;//全展
                         } else {
-                            int currentTop = releasedChild.getTop();//当前高度
-                            if (currentTop > halfExpandedOffset) {//低于半展高度则半展
-                                top = halfExpandedOffset;
-                                targetState = STATE_HALF_EXPANDED;
-                            } else {//否则全展
-                                top = expandedOffset;
-                                targetState = STATE_EXPANDED;
-                            }
+                            top = expandedOffset;
+                            targetState = STATE_EXPANDED;
                         }
                         Log.e(TAG, "onViewReleased: yvel < 0 ,top=" + top + ",state=" + getStateStr(targetState));
                     } else if (hideable && shouldHide(releasedChild, yvel)) {//是否进行隐藏操作
@@ -1388,66 +1206,31 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
                         } else if (fitToContents) {//如适配内容则全展
                             top = fitToContentsOffset;
                             targetState = STATE_EXPANDED;
-                        } else if (Math.abs(releasedChild.getTop() - expandedOffset)
-                                < Math.abs(releasedChild.getTop() - halfExpandedOffset)) {//如果高度离全展偏移近就全展，离半展近就半展
+                        } else {
                             top = expandedOffset;
                             targetState = STATE_EXPANDED;
-                        } else {
-                            top = halfExpandedOffset;
-                            targetState = STATE_HALF_EXPANDED;
                         }
                         Log.e(TAG, "onViewReleased: shouldHide ,top=" + top + ",state=" + getStateStr(targetState));
-                    } else if (yvel == 0.f || Math.abs(xvel) > Math.abs(yvel)) {//如y方向速度等于0或者x方向速度大于y方向速度
-                        // If the Y velocity is 0 or the swipe was mostly horizontal indicated by the X velocity
-                        // being greater than the Y velocity, settle to the nearest correct height.
+                    } else {
                         int currentTop = releasedChild.getTop();
                         if (fitToContents) {//适配内容高度
-                            if (Math.abs(currentTop - fitToContentsOffset)//离适配的展开高度近就展开，离折叠偏移位置近就折叠
-                                    < Math.abs(currentTop - collapsedOffset)) {
+                            if (currentTop < hideLineOffset) {
                                 top = fitToContentsOffset;
                                 targetState = STATE_EXPANDED;
                             } else {
-                                top = collapsedOffset;
-                                targetState = STATE_COLLAPSED;
+                                top = parentHeight;
+                                targetState = STATE_HIDDEN;
                             }
                         } else {//不适配内容高度
-                            if (currentTop < halfExpandedOffset) {//高于半展偏移
-                                if (currentTop < Math.abs(currentTop - collapsedOffset)) {//离顶部近就全展，离半展近就半展
-                                    top = expandedOffset;
-                                    targetState = STATE_EXPANDED;
-                                } else {
-                                    top = halfExpandedOffset;
-                                    targetState = STATE_HALF_EXPANDED;
-                                }
-                            } else {//低于或等于半展
-                                if (Math.abs(currentTop - halfExpandedOffset)
-                                        < Math.abs(currentTop - collapsedOffset)) {//离半展近就半展，离折叠近就折叠
-                                    top = halfExpandedOffset;
-                                    targetState = STATE_HALF_EXPANDED;
-                                } else {
-                                    top = collapsedOffset;
-                                    targetState = STATE_COLLAPSED;
-                                }
+                            if (currentTop < hideLineOffset) {
+                                top = expandedOffset;
+                                targetState = STATE_EXPANDED;
+                            } else {
+                                top = parentHeight;
+                                targetState = STATE_HIDDEN;
                             }
                         }
                         Log.e(TAG, "onViewReleased: yvel == 0.f ,top=" + top + ",state=" + getStateStr(targetState));
-                    } else { // Moving Down 其他情况y向下时且不进行隐藏时
-                        if (fitToContents) {//适配内容高度，则直接折叠
-                            top = collapsedOffset;
-                            targetState = STATE_COLLAPSED;
-                        } else {
-                            // Settle to the nearest correct height.计算最近的正确的高度
-                            int currentTop = releasedChild.getTop();
-                            if (Math.abs(currentTop - halfExpandedOffset)
-                                    < Math.abs(currentTop - collapsedOffset)) {//离半展近就半展，离折叠近就折叠
-                                top = halfExpandedOffset;
-                                targetState = STATE_HALF_EXPANDED;
-                            } else {
-                                top = collapsedOffset;
-                                targetState = STATE_COLLAPSED;
-                            }
-                        }
-                        Log.e(TAG, "onViewReleased: other ,top=" + top + ",state=" + getStateStr(targetState));
                     }
                     startSettlingAnimation(releasedChild, targetState, top, true);//进行结算距离后的动画
                 }
@@ -1462,7 +1245,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
                 @Override
                 public int clampViewPositionVertical(@NonNull View child, int top, int dy) {
                     return MathUtils.clamp(
-                            top, getExpandedOffset(), hideable ? parentHeight : collapsedOffset);
+                            top, getExpandedOffset(), hideable ? parentHeight : getExpandedOffset());
                 }
 
                 /**
@@ -1487,7 +1270,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
                     if (hideable) {
                         return parentHeight;
                     } else {
-                        return collapsedOffset;
+                        return hideLineOffset;
                     }
                 }
             };
@@ -1500,10 +1283,7 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
     void dispatchOnSlide(int top) {
         View bottomSheet = viewRef.get();
         if (bottomSheet != null && !callbacks.isEmpty()) {
-            float slideOffset =
-                    (top > collapsedOffset || collapsedOffset == getExpandedOffset())
-                            ? (float) (collapsedOffset - top) / (parentHeight - collapsedOffset)
-                            : (float) (collapsedOffset - top) / (collapsedOffset - getExpandedOffset());
+            float slideOffset = (float) (top - getExpandedOffset()) / (parentHeight - getExpandedOffset());
             for (int i = 0; i < callbacks.size(); i++) {
                 callbacks.get(i).onSlide(bottomSheet, slideOffset);
             }
@@ -1563,7 +1343,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         int peekHeight;
         boolean fitToContents;
         boolean hideable;
-        boolean skipCollapsed;
 
         public SavedState(@NonNull Parcel source) {
             this(source, null);
@@ -1576,7 +1355,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
             peekHeight = source.readInt();
             fitToContents = source.readInt() == 1;
             hideable = source.readInt() == 1;
-            skipCollapsed = source.readInt() == 1;
         }
 
         public SavedState(Parcelable superState, @NonNull HBottomSheetBehavior<?> behavior) {
@@ -1585,13 +1363,12 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
             this.peekHeight = behavior.peekHeight;
             this.fitToContents = behavior.fitToContents;
             this.hideable = behavior.hideable;
-            this.skipCollapsed = behavior.skipCollapsed;
         }
 
         /**
          * This constructor does not respect flags: {@link HBottomSheetBehavior#SAVE_PEEK_HEIGHT}, {@link
-         * HBottomSheetBehavior#SAVE_FIT_TO_CONTENTS}, {@link HBottomSheetBehavior#SAVE_HIDEABLE}, {@link
-         * HBottomSheetBehavior#SAVE_SKIP_COLLAPSED}. It is as if {@link HBottomSheetBehavior#SAVE_NONE}
+         * HBottomSheetBehavior#SAVE_FIT_TO_CONTENTS}.
+         * It is as if {@link HBottomSheetBehavior#SAVE_NONE}
          * were set.
          *
          * @deprecated Use {@link HBottomSheetBehavior.SavedState (Parcelable, BottomSheetBehavior)} instead.
@@ -1609,7 +1386,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
             out.writeInt(peekHeight);
             out.writeInt(fitToContents ? 1 : 0);
             out.writeInt(hideable ? 1 : 0);
-            out.writeInt(skipCollapsed ? 1 : 0);
         }
 
         public static final Creator<SavedState> CREATOR =
@@ -1655,134 +1431,6 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
         return (HBottomSheetBehavior<V>) behavior;
     }
 
-    /**
-     * Sets whether the BottomSheet should update the accessibility status of its {@link *
-     * CoordinatorLayout} siblings when expanded.
-     *
-     * <p>Set this to true if the expanded state of the sheet blocks access to siblings (e.g., when
-     * the sheet expands over the full screen).
-     */
-    public void setUpdateImportantForAccessibilityOnSiblings(
-            boolean updateImportantForAccessibilityOnSiblings) {
-        this.updateImportantForAccessibilityOnSiblings = updateImportantForAccessibilityOnSiblings;
-    }
-
-    private void updateImportantForAccessibility(boolean expanded) {
-        if (viewRef == null) {
-            return;
-        }
-
-        ViewParent viewParent = viewRef.get().getParent();
-        if (!(viewParent instanceof CoordinatorLayout)) {
-            return;
-        }
-
-        CoordinatorLayout parent = (CoordinatorLayout) viewParent;
-        final int childCount = parent.getChildCount();
-        if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) && expanded) {
-            if (importantForAccessibilityMap == null) {
-                importantForAccessibilityMap = new HashMap<>(childCount);
-            } else {
-                // The important for accessibility values of the child views have been saved already.
-                return;
-            }
-        }
-
-        for (int i = 0; i < childCount; i++) {
-            final View child = parent.getChildAt(i);
-            if (child == viewRef.get()) {
-                continue;
-            }
-
-            if (expanded) {
-                // Saves the important for accessibility value of the child view.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-                    importantForAccessibilityMap.put(child, child.getImportantForAccessibility());
-                }
-                if (updateImportantForAccessibilityOnSiblings) {
-                    ViewCompat.setImportantForAccessibility(
-                            child, ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
-                }
-            } else {
-                if (updateImportantForAccessibilityOnSiblings
-                        && importantForAccessibilityMap != null
-                        && importantForAccessibilityMap.containsKey(child)) {
-                    // Restores the original important for accessibility value of the child view.
-                    ViewCompat.setImportantForAccessibility(child, importantForAccessibilityMap.get(child));
-                }
-            }
-        }
-
-        if (!expanded) {
-            importantForAccessibilityMap = null;
-        }
-    }
-
-    /**
-     * 更新子view当前可执行状态
-     */
-    private void updateAccessibilityActions() {
-        if (viewRef == null) {
-            return;
-        }
-        V child = viewRef.get();
-        if (child == null) {
-            return;
-        }
-        ViewCompat.removeAccessibilityAction(child, AccessibilityNodeInfoCompat.ACTION_COLLAPSE);//折叠
-        ViewCompat.removeAccessibilityAction(child, AccessibilityNodeInfoCompat.ACTION_EXPAND);//展开
-        ViewCompat.removeAccessibilityAction(child, AccessibilityNodeInfoCompat.ACTION_DISMISS);//隐藏
-
-        if (hideable && state != STATE_HIDDEN) {
-            addAccessibilityActionForState(child, AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_DISMISS, STATE_HIDDEN);
-        }
-
-        switch (state) {
-            case STATE_EXPANDED: {//展开状态下可执行的状态
-                int nextState = fitToContents ? STATE_COLLAPSED : STATE_HALF_EXPANDED;//根据是否适配容器，折叠或半展
-                addAccessibilityActionForState(
-                        child, AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_COLLAPSE, nextState);
-                break;
-            }
-            case STATE_HALF_EXPANDED: {//半展开状态下可执行的状态
-                addAccessibilityActionForState(
-                        child, AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_COLLAPSE, STATE_COLLAPSED);//折叠
-                addAccessibilityActionForState(
-                        child, AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_EXPAND, STATE_EXPANDED);//全展开
-                break;
-            }
-            case STATE_COLLAPSED: {//折叠状态下可执行的状态
-                int nextState = fitToContents ? STATE_EXPANDED : STATE_HALF_EXPANDED;//根据是否适配容器，全展或半展
-                addAccessibilityActionForState(child, AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_EXPAND, nextState);
-                break;
-            }
-            default: // fall out
-        }
-    }
-
-    /**
-     * 新增可设置状态
-     *
-     * @param child
-     * @param action
-     * @param state
-     */
-    private void addAccessibilityActionForState(
-            V child, AccessibilityNodeInfoCompat.AccessibilityActionCompat action, final int state) {
-        ViewCompat.replaceAccessibilityAction(
-                child,
-                action,
-                null,
-                new AccessibilityViewCommand() {
-                    @Override
-                    public boolean perform(@NonNull View view, @Nullable CommandArguments arguments) {
-                        setState(state);
-                        return true;
-                    }
-                });
-    }
-
-
     private String getStateStr(int state) {
         switch (state) {
             case STATE_DRAGGING:
@@ -1791,12 +1439,8 @@ public class HBottomSheetBehavior<V extends View> extends CoordinatorLayout.Beha
                 return "STATE_SETTLING";
             case STATE_EXPANDED:
                 return "STATE_EXPANDED";
-            case STATE_COLLAPSED:
-                return "STATE_COLLAPSED";
             case STATE_HIDDEN:
                 return "STATE_HIDDEN";
-            case STATE_HALF_EXPANDED:
-                return "STATE_HALF_EXPANDED";
         }
         return "no state";
     }
